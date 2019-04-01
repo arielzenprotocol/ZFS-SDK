@@ -4,6 +4,7 @@ module Result   = Infrastructure.Result
 
 module Contract = Consensus.Contract
 module Types    = Consensus.Types
+module Asset    = Consensus.Asset
 module ZFSConv  = Consensus.ZFStar
 module Hash     = Consensus.Hash
 module Crypto   = Consensus.Crypto
@@ -33,6 +34,49 @@ type stateUpdate = Zen.Types.Main.stateUpdate
 
 type contractReturn = txSkeleton * Option<message> * stateUpdate 
 type CR             = Result<contractReturn, string>
+
+
+
+(*
+------------------------------------------------------------------------------------------------------------------------
+======================================== OPTION BUILDER ================================================================
+------------------------------------------------------------------------------------------------------------------------
+*)
+
+type OptionBuilder() =
+
+    member this.Return<'a> (x : 'a) : 'a option =
+        Some x
+
+    member this.Bind<'a, 'b> (m : 'a option, f : 'a -> 'b option) : 'b option =
+        Option.bind f m
+
+    member this.ReturnFrom<'a> (opt : 'a option) : 'a option =
+        opt
+
+    member this.Zero() =
+        None
+
+    member this.Yield<'a> (x : 'a) : 'a option =
+        Some x
+
+    member this.YieldFrom<'a> (opt : 'a option) : 'a option =
+        opt
+
+    member this.Delay (f : unit -> 'a option) = f()
+    
+    member this.Combine (opt1 : 'a option , opt2 : 'a option) : 'a option =
+        Option.bind (fun _ -> opt2) opt1
+
+let option = OptionBuilder()
+
+let (<@|) f x = Option.map f x
+let (|@>) x f = Option.map f x
+let (=<<) f x = Option.bind f x
+let (>>=) x f = Option.bind f x
+let (<*|) f x = Option.bind (fun x -> Option.map (fun f -> f x) f) x
+let (|*>) x f = Option.bind (fun x -> Option.map (fun f -> f x) f) x
+let sequenceA xs = Infrastructure.Option.traverseA id xs
 
 
 
@@ -106,6 +150,7 @@ let validateCR (expected : Result<condition<contractReturn>, Option<string>>) (g
 //    | TxFailure        of TxFailure list
 
 
+
 (*
 ------------------------------------------------------------------------------------------------------------------------
 ======================================== Contract Loading & Execution ==================================================
@@ -137,7 +182,7 @@ let getContractVersion (Types.ContractId (contractVersion, _)) = contractVersion
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
-// TODO  
+// TODO: implement this
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
@@ -145,7 +190,7 @@ let getContractVersion (Types.ContractId (contractVersion, _)) = contractVersion
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
-// TODO
+// TODO: implement this
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
@@ -218,7 +263,7 @@ let generatePublicKey  = generateKeyPair >> snd
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
-// TODO
+// TODO: implement this
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
@@ -226,7 +271,7 @@ let generatePublicKey  = generateKeyPair >> snd
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
-// TODO
+// TODO: implement this
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
@@ -234,7 +279,7 @@ let generatePublicKey  = generateKeyPair >> snd
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
-// TODO
+// TODO: implement this
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
@@ -278,6 +323,77 @@ let mkPointedOutput lock asset amount : Consensus.Types.PointedOutput =
 let mkMint asset amount : Input =
     Tx.Mint (mkSpend asset amount)
 
+(* ===== Simplified TX generation ==== *)
+module SimpleTx =
+
+    type SimpleContract =
+        | ThisContract
+        | OtherContract of string
+    
+    type SimpleLock =
+        | PK of string
+        | Contract of SimpleContract
+    
+    type SimpleTxComponent =
+        | Mint of string * uint64
+        | Input of string * uint64
+        | Output of SimpleLock * string * uint64 
+    
+    type SimpleTx = List<SimpleTxComponent>
+    
+    type private FinalizedComponent =
+        | FinalizedInput of Input
+        | FinalizedOutput of Types.Output
+    
+    let initTx = List.empty
+    
+    let addInput (asset : string) (amount : uint64) (tx : SimpleTx) : SimpleTx =
+        Input (asset, amount) :: tx
+    
+    let addOutput (lock : SimpleLock) (asset : string) (amount : uint64) (tx : SimpleTx) : SimpleTx =
+        Output (lock, asset, amount) :: tx
+    
+    let private finalizeLock (lock : SimpleLock) : Types.Lock =
+        failwith "ERROR: `finalizeLock` not implemented yet"
+        // match lock with
+        // | PK pk ->
+        // | Contract ThisContract -> 
+        // | Contract (OtherContract contractName) ->
+    
+    let private finalizeComponent (item : SimpleTxComponent) : Option<FinalizedComponent> =
+        match item with
+        | Mint (asset, amount) -> option {
+                let! asset = Asset.fromString asset
+                return FinalizedInput <| mkMint asset amount
+            }
+        | Input (asset, amount) -> option {
+                let! asset = Asset.fromString asset
+                return FinalizedInput <| mkInput (Types.PK zeroHash) asset amount
+            }
+        | Output (lock, asset, amount) -> option {
+                let! asset = Asset.fromString asset
+                return FinalizedOutput <| mkOutput (finalizeLock lock) asset amount
+            }
+    
+    let private organizeTx : SimpleTx -> list<Input> * list<Types.Output> =
+        let rec organizeTxAux ((ins, outs) : list<Input> * list<Types.Output>) (tx : SimpleTx) : list<Input> * list<Types.Output> =
+            match tx with
+            | [] ->
+                (ins, outs)
+            | hd :: tl ->
+                match finalizeComponent hd with
+                | Some (FinalizedInput input)   -> organizeTxAux (input::ins, outs        ) tl
+                | Some (FinalizedOutput output) -> organizeTxAux (ins       , output::outs) tl
+                | None                          -> organizeTxAux (ins       , outs        ) tl
+        in organizeTxAux ([], [])
+    
+    let finalize (tx : SimpleTx) : Tx.T =
+        let (inps, outs) = organizeTx tx in {
+            pInputs = inps
+            outputs = outs
+        }
+
+
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
@@ -285,7 +401,7 @@ let mkMint asset amount : Input =
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
-// TODO
+// TODO: implement this
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
@@ -293,4 +409,4 @@ let mkMint asset amount : Input =
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
-// TODO
+// TODO: implement this
