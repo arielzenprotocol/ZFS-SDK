@@ -39,7 +39,18 @@ type CR             = Result<contractReturn, string>
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
-======================================== OPTION BUILDER ================================================================
+======================================== Utils =========================================================================
+------------------------------------------------------------------------------------------------------------------------
+*)
+
+let stringToHash (s : string) : Hash =
+    System.Text.Encoding.ASCII.GetBytes(s) |> Hash.compute 
+
+
+
+(*
+------------------------------------------------------------------------------------------------------------------------
+======================================== Option Builder ================================================================
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
@@ -218,6 +229,7 @@ let hashBytes : byte[] -> byte[] =
     Hash.compute >> Hash.bytes
 
 
+
 (*
 ------------------------------------------------------------------------------------------------------------------------
 ======================================== Data (Message Body & State) Generation ========================================
@@ -260,14 +272,6 @@ let generatePublicKey  = generateKeyPair >> snd
 (*
 ------------------------------------------------------------------------------------------------------------------------
 ======================================== Context Generation ============================================================
-------------------------------------------------------------------------------------------------------------------------
-*)
-
-// TODO: implement this
-
-(*
-------------------------------------------------------------------------------------------------------------------------
-======================================== Wallet Generation =============================================================
 ------------------------------------------------------------------------------------------------------------------------
 *)
 
@@ -325,40 +329,28 @@ let mkMint asset amount : Input =
 
 (* ===== Simplified TX generation ==== *)
 module SimpleTx =
-
-    type SimpleContract =
-        | ThisContract
-        | OtherContract of string
     
     type SimpleLock =
         | PK of string
-        | Contract of SimpleContract
+        | Contract of string
     
     type SimpleTxComponent =
         | Mint of string * uint64
         | Input of string * uint64
         | Output of SimpleLock * string * uint64 
-    
-    type SimpleTx = List<SimpleTxComponent>
-    
+      
     type private FinalizedComponent =
         | FinalizedInput of Input
         | FinalizedOutput of Types.Output
+        
+    type private SimpleTx = List<FinalizedComponent>
     
     let initTx = List.empty
     
-    let addInput (asset : string) (amount : uint64) (tx : SimpleTx) : SimpleTx =
-        Input (asset, amount) :: tx
-    
-    let addOutput (lock : SimpleLock) (asset : string) (amount : uint64) (tx : SimpleTx) : SimpleTx =
-        Output (lock, asset, amount) :: tx
-    
     let private finalizeLock (lock : SimpleLock) : Types.Lock =
-        failwith "ERROR: `finalizeLock` not implemented yet"
-        // match lock with
-        // | PK pk ->
-        // | Contract ThisContract -> 
-        // | Contract (OtherContract contractName) ->
+        match lock with
+        | PK pk               -> Types.PK       <| stringToHash pk
+        | Contract contractId -> Types.Contract <| Types.ContractId (0ul, stringToHash contractId)
     
     let private finalizeComponent (item : SimpleTxComponent) : Option<FinalizedComponent> =
         match item with
@@ -374,6 +366,27 @@ module SimpleTx =
                 let! asset = Asset.fromString asset
                 return FinalizedOutput <| mkOutput (finalizeLock lock) asset amount
             }
+        
+    let addSimpleInput (asset : string) (amount : uint64) (tx : SimpleTx) : SimpleTx =
+        match finalizeComponent <| Input (asset, amount) with
+        | Some t -> t :: tx
+        | None   -> tx
+        
+    let addSimpleMint (asset : string) (amount : uint64) (tx : SimpleTx) : SimpleTx =
+        match finalizeComponent <| Mint (asset, amount) with
+        | Some t -> t :: tx
+        | None   -> tx
+    
+    let addSimpleOutput (lock : SimpleLock) (asset : string) (amount : uint64) (tx : SimpleTx) : SimpleTx =
+        match finalizeComponent <| Output (lock, asset, amount) with
+        | Some t -> t :: tx
+        | None   -> tx
+
+    let addInput (input : Input) (tx : SimpleTx) : SimpleTx =
+        FinalizedInput input :: tx
+    
+    let addOutput (output : Types.Output) (tx : SimpleTx) : SimpleTx =
+        FinalizedOutput output :: tx
     
     let private organizeTx : SimpleTx -> list<Input> * list<Types.Output> =
         let rec organizeTxAux ((ins, outs) : list<Input> * list<Types.Output>) (tx : SimpleTx) : list<Input> * list<Types.Output> =
@@ -381,10 +394,9 @@ module SimpleTx =
             | [] ->
                 (ins, outs)
             | hd :: tl ->
-                match finalizeComponent hd with
-                | Some (FinalizedInput input)   -> organizeTxAux (input::ins, outs        ) tl
-                | Some (FinalizedOutput output) -> organizeTxAux (ins       , output::outs) tl
-                | None                          -> organizeTxAux (ins       , outs        ) tl
+                match hd with
+                | FinalizedInput input   -> organizeTxAux (input::ins, outs        ) tl
+                | FinalizedOutput output -> organizeTxAux (ins       , output::outs) tl
         in organizeTxAux ([], [])
     
     let finalize (tx : SimpleTx) : Tx.T =
@@ -394,6 +406,14 @@ module SimpleTx =
         }
 
 
+
+(*
+------------------------------------------------------------------------------------------------------------------------
+======================================== Wallet Generation =============================================================
+------------------------------------------------------------------------------------------------------------------------
+*)
+
+// TODO: implement this
 
 (*
 ------------------------------------------------------------------------------------------------------------------------
