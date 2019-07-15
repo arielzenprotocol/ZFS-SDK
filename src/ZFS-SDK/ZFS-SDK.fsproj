@@ -39,7 +39,7 @@
     <Reference Include="basic, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
       <HintPath>$(SolutionDir)\..\packages\ZFStar\tools\basic.dll</HintPath>
     </Reference>
-    <Reference Include="FSharp.Data.DesignTime, Version=2.4.6.0, Culture=neutral, PublicKeyToken=null">
+    <Reference Include="FSharp.Data.DesignTime, Version=3.1.1.0, Culture=neutral, PublicKeyToken=null">
       <HintPath>..\..\packages\FSharp.Data\lib\net45\FSharp.Data.DesignTime.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
