@@ -17,8 +17,8 @@ nuget ContractsTestingLib 0.1.0
 nuget Zulib 0.3.38-alpha008
 nuget ZFStar 0.0.27-alpha004
 nuget ZFS-Tools 0.0.25-alpha005
-nuget Infrastructure 0.9.32-beta
-nuget Consensus 0.9.32-beta
+nuget Infrastructure 0.9.32-beta06-next
+nuget Consensus 0.9.32-beta06-next
 nuget zen_secp256k1_osx
 nuget zen_secp256k1_linux
 nuget zen_z3_osx
